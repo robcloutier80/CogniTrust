@@ -1,59 +1,74 @@
 # main.py
-from utils import fetch_sources, load_cache, save_cache, is_contextual
-import json
 
-# Confidence thresholds
-THRESHOLDS = {
-    "empirical": {"green": 0.99, "yellow": 0.85, "orange": 0.65, "red": 0.0},
-    "contextual": {"green": 0.95, "yellow": 0.75, "orange": 0.65, "red": 0.0},
-}
+from utils import BACKENDS
+from learner import load_learning, get_weight, update_weights
+from calibration import calibrate_score
+from explain import generate_explanation
 
-SYMBOLS = {"green": "✅", "yellow": "⚠️", "orange": "❗", "red": "🛑"}
+learning_data = load_learning()
 
-CACHE_FILE = "cache.json"
-CACHE = load_cache(CACHE_FILE)
 
-def get_confidence_level(score, contextual=False):
-    levels = THRESHOLDS["contextual"] if contextual else THRESHOLDS["empirical"]
-    for level in ["green", "yellow", "orange", "red"]:
-        if score >= levels[level]:
-            return level
-    return "red"
+def weighted_aggregate(backend_results):
+    total = 0
+    weight_sum = 0
+    used = 0
 
-def aggregate_confidences(confidences):
-    if not confidences:
-        return None, True  # None score, partial
-    valid_scores = [c for c in confidences if c is not None]
-    if not valid_scores:
+    for b in backend_results:
+        if b["score"] is None:
+            continue
+
+        w = get_weight(b["name"], learning_data)
+        total += b["score"] * w
+        weight_sum += w
+        used += 1
+
+    if weight_sum == 0:
         return None, True
-    avg_score = sum(valid_scores) / len(valid_scores)
-    partial = len(valid_scores) < len(confidences)
-    return avg_score, partial
 
-def evaluate_statement(statement):
-    contextual = is_contextual(statement)
-    backend_scores = []
+    return total / weight_sum, used < len(backend_results)
 
-    # Query all open-source backends
-    for source_func in fetch_sources:
-        try:
-            score = source_func(statement)
-            backend_scores.append(score)
-        except Exception:
-            backend_scores.append(None)
 
-    final_score, partial = aggregate_confidences(backend_scores)
-    if final_score is None:
-        level = "red"
-        symbol = SYMBOLS[level]
-        message = "Unable to complete"
+def get_level(score):
+    if score is None:
+        return "red", "🛑"
+
+    if score >= 0.95:
+        return "green", "✅"
+    elif score >= 0.75:
+        return "yellow", "⚠️"
+    elif score >= 0.65:
+        return "orange", "❗"
     else:
-        level = get_confidence_level(final_score, contextual)
-        symbol = SYMBOLS[level]
-        message = f"{final_score*100:.1f}%"
-        if partial:
-            message += " (partial)"
+        return "red", "🛑"
 
-    # Save cache
-    save_cache(CACHE_FILE, CACHE)
-    return symbol, level, message
+
+def evaluate(statement):
+    backend_results = []
+
+    for name, func in BACKENDS:
+        try:
+            score = func(statement)
+        except:
+            score = None
+
+        backend_results.append({"name": name, "score": score})
+
+    raw_score, partial = weighted_aggregate(backend_results)
+    calibrated = calibrate_score(raw_score)
+
+    level, symbol = get_level(calibrated)
+    explanation = generate_explanation(statement, backend_results, calibrated)
+
+    return {
+        "score": calibrated,
+        "raw_score": raw_score,
+        "partial": partial,
+        "level": level,
+        "symbol": symbol,
+        "backend_results": backend_results,
+        "explanation": explanation
+    }
+
+
+def feedback(result, correct=True):
+    update_weights(result["backend_results"], correct, learning_data)

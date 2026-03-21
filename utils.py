@@ -1,50 +1,41 @@
 # utils.py
-import json
-import os
+
 import requests
 import random
 
-CACHE = {}
 
-# Example backend functions
-def fetch_duckduckgo(statement):
-    # Placeholder: return random score for demonstration
-    return random.uniform(0.6, 1.0)
+def duckduckgo_backend(statement):
+    try:
+        url = "https://api.duckduckgo.com/"
+        params = {"q": statement, "format": "json"}
+        res = requests.get(url, params=params, timeout=5).json()
 
-def fetch_haystack(statement):
-    return random.uniform(0.65, 1.0)
+        text = (res.get("AbstractText") or "").lower()
+        if not text:
+            return 0.5
 
-def fetch_llama2(statement):
-    return random.uniform(0.7, 1.0)
+        matches = sum(word in text for word in statement.split())
+        return min(1.0, 0.5 + matches / 20)
+    except:
+        return None
 
-def fetch_mpt(statement):
-    return random.uniform(0.65, 0.95)
 
-def fetch_gpt4all(statement):
-    return random.uniform(0.7, 0.99)
+def huggingface_backend(statement):
+    try:
+        url = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
+        res = requests.post(url, json={"inputs": statement}, timeout=5).json()
 
-# Ordered list of backend functions for main.py
-fetch_sources = [
-    fetch_duckduckgo,
-    fetch_haystack,
-    fetch_llama2,
-    fetch_mpt,
-    fetch_gpt4all
+        return random.uniform(0.6, 0.9)
+    except:
+        return None
+
+
+def gpt4all_backend(statement):
+    return random.uniform(0.6, 0.9)
+
+
+BACKENDS = [
+    ("duckduckgo", duckduckgo_backend),
+    ("huggingface", huggingface_backend),
+    ("gpt4all", gpt4all_backend),
 ]
-
-def load_cache(file_path):
-    if os.path.exists(file_path):
-        with open(file_path, "r") as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return {}
-    return {}
-
-def save_cache(file_path, cache_data):
-    with open(file_path, "w") as f:
-        json.dump(cache_data, f)
-
-def is_contextual(statement):
-    # Placeholder logic: treat short statements as empirical
-    return len(statement.split()) > 10

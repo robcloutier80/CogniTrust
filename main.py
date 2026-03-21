@@ -1,74 +1,51 @@
-# main.py
-
 from utils import BACKENDS
 from learner import load_learning, get_weight, update_weights
 from calibration import calibrate_score
-from explain import generate_explanation
-
-learning_data = load_learning()
-
-
-def weighted_aggregate(backend_results):
-    total = 0
-    weight_sum = 0
-    used = 0
-
-    for b in backend_results:
-        if b["score"] is None:
-            continue
-
-        w = get_weight(b["name"], learning_data)
-        total += b["score"] * w
-        weight_sum += w
-        used += 1
-
-    if weight_sum == 0:
-        return None, True
-
-    return total / weight_sum, used < len(backend_results)
-
-
-def get_level(score):
-    if score is None:
-        return "red", "🛑"
-
-    if score >= 0.95:
-        return "green", "✅"
-    elif score >= 0.75:
-        return "yellow", "⚠️"
-    elif score >= 0.65:
-        return "orange", "❗"
-    else:
-        return "red", "🛑"
-
 
 def evaluate(statement):
+    learning_data = load_learning()
     backend_results = []
-
+    
+    # 1. Collect Raw Scores
     for name, func in BACKENDS:
         try:
             score = func(statement)
         except:
             score = None
-
         backend_results.append({"name": name, "score": score})
 
-    raw_score, partial = weighted_aggregate(backend_results)
-    calibrated = calibrate_score(raw_score)
+    # 2. Weighted Voter Logic
+    weighted_sum = 0
+    total_weight = 0
+    for b in backend_results:
+        if b["score"] is not None:
+            w = get_weight(b["name"], learning_data)
+            weighted_sum += b["score"] * w
+            total_weight += w
 
-    level, symbol = get_level(calibrated)
-    explanation = generate_explanation(statement, backend_results, calibrated)
+    if total_weight == 0:
+        raw_score = 0.5
+    else:
+        raw_score = weighted_sum / total_weight
+
+    # 3. Calibration & Result Generation
+    calibrated = calibrate_score(raw_score)
+    
+    if calibrated >= 0.85:
+        level, symbol = "GREEN", "✅"
+    elif calibrated >= 0.65:
+        level, symbol = "YELLOW", "⚠️"
+    else:
+        level, symbol = "RED", "🛑"
 
     return {
         "score": calibrated,
-        "raw_score": raw_score,
-        "partial": partial,
         "level": level,
         "symbol": symbol,
         "backend_results": backend_results,
-        "explanation": explanation
+        "statement": statement
     }
 
-
-def feedback(result, correct=True):
-    update_weights(result["backend_results"], correct, learning_data)
+def submit_feedback(result, user_says_correct):
+    data = load_learning()
+    update_weights(result["backend_results"], user_says_correct, data)

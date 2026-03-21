@@ -1,0 +1,6 @@
+---
+
+```text id="ct_v21_requirements"
+# requirements.txt
+# CogniTrust v2.1 dependencies
+# None required for base demo

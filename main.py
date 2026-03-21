@@ -1,66 +1,59 @@
 # main.py
-
-"""
-CogniTrust v2.2 – Functional Confidence Scoring Module
-Author: Rob Cloutier
-License: MIT
-Purpose: Provides confidence scores (green/yellow/orange/red) for statements using open-source APIs.
-"""
-
-from utils import fetch_fact, compute_confidence
+from utils import fetch_sources, load_cache, save_cache, is_contextual
+import json
 
 # Confidence thresholds
-CONFIDENCE_LEVELS = {
-    "green": 0.98,
-    "yellow": 0.80,
-    "orange": 0.60,
-    "red": 0.0
+THRESHOLDS = {
+    "empirical": {"green": 0.99, "yellow": 0.85, "orange": 0.65, "red": 0.0},
+    "contextual": {"green": 0.95, "yellow": 0.75, "orange": 0.65, "red": 0.0},
 }
 
-class CogniTrust:
-    def __init__(self):
-        self.sources = []
+SYMBOLS = {"green": "✅", "yellow": "⚠️", "orange": "❗", "red": "🛑"}
 
-    def check_statement(self, statement):
-        """
-        Check a statement and return:
-        - confidence (0.0-1.0)
-        - level (red/orange/yellow/green)
-        - sources used
-        """
-        fetched_info = fetch_fact(statement)
-        confidence = compute_confidence(statement, fetched_info)
+CACHE_FILE = "cache.json"
+CACHE = load_cache(CACHE_FILE)
 
-        # Determine color level
-        if confidence >= CONFIDENCE_LEVELS["green"]:
-            level = "green"
-        elif confidence >= CONFIDENCE_LEVELS["yellow"]:
-            level = "yellow"
-        elif confidence >= CONFIDENCE_LEVELS["orange"]:
-            level = "orange"
-        else:
-            level = "red"
+def get_confidence_level(score, contextual=False):
+    levels = THRESHOLDS["contextual"] if contextual else THRESHOLDS["empirical"]
+    for level in ["green", "yellow", "orange", "red"]:
+        if score >= levels[level]:
+            return level
+    return "red"
 
-        self.sources = fetched_info.get("sources", [])
+def aggregate_confidences(confidences):
+    if not confidences:
+        return None, True  # None score, partial
+    valid_scores = [c for c in confidences if c is not None]
+    if not valid_scores:
+        return None, True
+    avg_score = sum(valid_scores) / len(valid_scores)
+    partial = len(valid_scores) < len(confidences)
+    return avg_score, partial
 
-        return {
-            "statement": statement,
-            "confidence": round(confidence, 2),
-            "level": level,
-            "sources": self.sources
-        }
+def evaluate_statement(statement):
+    contextual = is_contextual(statement)
+    backend_scores = []
 
-if __name__ == "__main__":
-    ct = CogniTrust()
-    test_statements = [
-        "The earth orbits the sun.",
-        "Electric cars cannot recharge while driving."
-    ]
+    # Query all open-source backends
+    for source_func in fetch_sources:
+        try:
+            score = source_func(statement)
+            backend_scores.append(score)
+        except Exception:
+            backend_scores.append(None)
 
-    for s in test_statements:
-        result = ct.check_statement(s)
-        print(f"Statement: {result['statement']}")
-        print(f"Confidence: {result['confidence']} ({result['level']})")
-        if result['sources']:
-            print(f"Sources: {', '.join(result['sources'])}")
-        print("-" * 40)
+    final_score, partial = aggregate_confidences(backend_scores)
+    if final_score is None:
+        level = "red"
+        symbol = SYMBOLS[level]
+        message = "Unable to complete"
+    else:
+        level = get_confidence_level(final_score, contextual)
+        symbol = SYMBOLS[level]
+        message = f"{final_score*100:.1f}%"
+        if partial:
+            message += " (partial)"
+
+    # Save cache
+    save_cache(CACHE_FILE, CACHE)
+    return symbol, level, message

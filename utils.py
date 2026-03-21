@@ -1,41 +1,50 @@
 # utils.py
-
-"""
-CogniTrust Utility Functions
-Handles open-source API requests and confidence scoring
-"""
-
+import json
+import os
 import requests
+import random
 
-FACT_API = "https://api.duckduckgo.com/?q={query}&format=json&no_redirect=1"
+CACHE = {}
 
-def fetch_fact(statement):
-    """
-    Fetch information from open-source APIs.
-    Returns a dict with 'data' and 'sources' keys.
-    """
-    try:
-        response = requests.get(FACT_API.format(query=statement))
-        if response.status_code == 200:
-            data = response.json()
-            sources = []
-            abstract = data.get("AbstractText", "")
-            if abstract:
-                sources.append("DuckDuckGo Abstract")
-            return {"data": abstract, "sources": sources}
-        else:
-            return {"data": "", "sources": []}
-    except Exception:
-        return {"data": "", "sources": []}
+# Example backend functions
+def fetch_duckduckgo(statement):
+    # Placeholder: return random score for demonstration
+    return random.uniform(0.6, 1.0)
 
-def compute_confidence(statement, fetched_info):
-    """
-    Compute a confidence score (0.0-1.0) based on presence of information.
-    Green: >0.98, Yellow: 0.80-0.98, Orange: 0.60-0.80, Red: <0.60
-    """
-    data = fetched_info.get("data", "")
-    if not data:
-        return 0.0
-    words = statement.lower().split()
-    matches = sum(1 for w in words if w in data.lower())
-    return min(1.0, matches / max(len(words), 1))
+def fetch_haystack(statement):
+    return random.uniform(0.65, 1.0)
+
+def fetch_llama2(statement):
+    return random.uniform(0.7, 1.0)
+
+def fetch_mpt(statement):
+    return random.uniform(0.65, 0.95)
+
+def fetch_gpt4all(statement):
+    return random.uniform(0.7, 0.99)
+
+# Ordered list of backend functions for main.py
+fetch_sources = [
+    fetch_duckduckgo,
+    fetch_haystack,
+    fetch_llama2,
+    fetch_mpt,
+    fetch_gpt4all
+]
+
+def load_cache(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {}
+    return {}
+
+def save_cache(file_path, cache_data):
+    with open(file_path, "w") as f:
+        json.dump(cache_data, f)
+
+def is_contextual(statement):
+    # Placeholder logic: treat short statements as empirical
+    return len(statement.split()) > 10

@@ -1,0 +1,36 @@
+# Logs
+system.log
+
+# Learning & cache data
+agent_records.json
+cache.json
+
+# Environment / secrets
+.env
+
+# Local GPT4All model binaries
+*.bin
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE / editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Streamlit temp files
+.streamlit/

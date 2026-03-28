@@ -1,0 +1,19 @@
+# CogniTrust v5.0 — Requirements
+# Trimmed to only what's actually used.
+# The original requirements.txt pulled PyTorch, GPT4All, Haystack, Elasticsearch,
+# and other multi-GB packages for backends that weren't functional.
+# This file is ~99% lighter.
+
+# ── Core ───────────────────────────────────────────────────────────────────────
+requests>=2.31.0          # All backend HTTP calls
+python-dotenv>=1.0.0      # Load HUGGINGFACE_TOKEN from .env file
+
+# ── Web UI ─────────────────────────────────────────────────────────────────────
+streamlit>=1.32.0
+
+# ── Optional: HuggingFace backend ─────────────────────────────────────────────
+# No extra package needed — uses the hosted Inference API over HTTP.
+# Set HUGGINGFACE_TOKEN in .env to activate this backend.
+
+# ── Dev / Testing ──────────────────────────────────────────────────────────────
+# pytest>=7.0.0  # uncomment to run the test suite
